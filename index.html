@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="description" content="Explore measured gene–field–body relationships in an evolved SEED robot. Interactive 3D voxels, regulatory graph, and arbitrary cross-sections.">
+<title>SEED — Gene–Body Explorer</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" id="app">
+<button id="sidebarToggle" class="mobile-toggle" aria-controls="sidebar" aria-expanded="false" aria-label="Open controls"><span></span><span></span></button>
+<button id="scrim" class="scrim" aria-label="Close controls" tabindex="-1" hidden></button>
+<aside id="sidebar" class="sidebar" aria-label="Explorer controls">
+<header class="brand">
+ <a class="wordmark" href="https://github.com/SEED-Robot" target="_blank" rel="noopener noreferrer" aria-label="SEED Robot on GitHub"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 24V8h10v8h10v10H16V16H6"/></svg><span>SEED<span class="brand-dot">.</span></span></a>
+ <h1>Gene–Body Explorer</h1>
+ <p>Follow a gene. Explore its footprint.</p>
+</header>
+<div class="sidebar-scroll">
+<section class="control-section" aria-labelledby="displayTitle">
+ <h2 id="displayTitle">View</h2>
+ <label class="field" for="layer"><span>Display</span><select id="layer"><option value="effect">Material dependence</option><option value="regions">WT body regions</option><option value="product">WT gene product · c</option><option value="hm">Material field · Hm</option><option value="hj">Joint field · Hj</option><option value="dhm">Material difference · ΔHm</option><option value="dhj">Joint difference · ΔHj</option></select></label>
+ <label class="field" for="bodyKind"><span>Body</span><select id="bodyKind"><option value="physical">WT assembled body</option><option value="raw">WT raw material</option><option value="ko">KO raw material</option></select></label>
+</section>
+<section class="control-section" aria-labelledby="selectionTitle">
+ <h2 id="selectionTitle">Intervention</h2>
+ <label class="field" for="focus"><span>Gene or measured group</span><select id="focus"><option value="all">All measured groups</option><option value="group0" selected>G1 · N16a + g001</option></select></label>
+ <p class="microcopy">KO switches off production. WT is the unedited reference.</p>
+</section>
+<section class="control-section" aria-labelledby="sectionTitle">
+ <h2 id="sectionTitle">Section</h2>
+ <label class="field compact-field" for="cutMode"><span>Mode</span><select id="cutMode"><option value="off" selected>Full body</option><option value="cut">Cutaway</option><option value="plane">Cross-section only</option><option value="slab">Thin slab</option></select></label>
+ <div id="sliceControls" class="slice-controls" hidden>
+  <label class="field compact-field" for="direction"><span>Plane normal</span><select id="direction"><option value="x">X axis</option><option value="y" selected>Y axis</option><option value="z">Z axis</option><option value="free">Custom angle</option></select></label>
+  <div class="range-header"><label for="depth">Depth</label><output id="depthValue">−12 mm</output></div>
+  <div class="range-row"><input id="depth" type="range" min="-400" max="400" value="-12" step="1" aria-label="Section depth"><button id="flip" class="icon-button" title="Reverse the retained side" aria-label="Reverse the retained side">↔</button></div>
+  <div id="angles" class="angles" hidden>
+   <label class="range-header" for="azimuth">Azimuth</label><input id="azimuth" type="range" min="-180" max="180" value="45" aria-label="Section normal azimuth">
+   <label class="range-header" for="elevation">Elevation</label><input id="elevation" type="range" min="-89" max="89" value="20" aria-label="Section normal elevation">
+  </div>
+ </div>
+</section>
+<section id="graphPanel" class="control-section graph-panel" aria-labelledby="graphTitle">
+ <div class="section-header"><h2 id="graphTitle">Regulatory map</h2><button id="graphToggle" class="text-button" aria-expanded="true" aria-controls="graphContent">Hide</button></div>
+ <div id="graphContent"><p class="microcopy">Select a node to reveal its measured response.</p><svg id="graph" viewBox="0 0 330 330" role="group" aria-label="22 genes and 21 signed directed regulatory relationships"></svg><div class="graph-legend"><span>→ Activation</span><span>┤ Inhibition</span></div></div>
+</section>
+<section class="control-section appearance-section">
+ <button id="options" class="disclosure" aria-expanded="false" aria-controls="settings"><span>Display options</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 3 5 5-5 5"/></svg></button>
+ <div id="settings">
+  <div class="range-header"><label for="opacity">Opacity</label><span>15–100%</span></div><input id="opacity" type="range" min="15" max="100" value="95" aria-label="Body opacity">
+  <div class="range-header"><label for="thickness">Slab thickness</label><output id="thicknessValue">12 mm</output></div><input id="thickness" type="range" min="6" max="96" value="12" step="6" aria-label="Slab thickness">
+  <label class="toggle-row" for="hardware"><span>Joint hardware</span><input id="hardware" type="checkbox" role="switch" checked></label>
+  <label class="toggle-row" for="voxelEdges"><span>Voxel edges</span><input id="voxelEdges" type="checkbox" role="switch"></label>
+  <label class="toggle-row" for="planeGuide"><span>Section guide</span><input id="planeGuide" type="checkbox" role="switch" checked></label>
+ </div>
+ <button id="reset" class="reset-button" title="Restore the initial camera">Reset view <span aria-hidden="true">↺</span></button>
+</section>
+</div>
+<footer class="sidebar-footer"><span class="live-dot" aria-hidden="true"></span><span>Measured data · Flat terrain · G50</span></footer>
+</aside>
+<main class="workspace" aria-label="Three-dimensional explorer">
+ <div class="canvas-header"><div><span class="eyebrow">EVOLVED ROBOT</span><div class="model-name">g0048_c017 <span class="model-tag">WT</span></div></div><span class="scale-note">12 mm voxels</span></div>
+ <div class="viewport" id="viewport">
+  <canvas id="view" aria-label="Interactive voxel robot. Drag to orbit, scroll to zoom, right-drag to pan." tabindex="0"></canvas>
+  <button id="sliceHandle" class="handle" aria-label="Drag vertically to move the section" title="Drag to change section depth" hidden>↕</button>
+  <svg id="axis" class="axis" viewBox="0 0 80 80" aria-hidden="true"></svg>
+  <div id="legend" class="legend" aria-live="polite"></div>
+  <div id="loading" role="status"><span class="spinner"></span><span>Loading measured data…</span></div>
+  <div id="error" role="alert"></div>
+ </div>
+ <footer class="canvas-footer"><div><p id="status" aria-live="polite"></p><p id="caption" class="caption"></p></div><p class="gesture-hint">Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Right-drag to pan</p></footer>
+</main>
+</div>
+<noscript>This interactive viewer requires JavaScript and WebGL 2.</noscript>
+<script src="data/manifest.js"></script><script src="viewer.js"></script><script src="ui.js"></script>
+</body>
+</html>
