@@ -176,7 +176,8 @@
     needRender=false;if(!base)return;
     const dpr=Math.min(devicePixelRatio||1,2),w=Math.round(canvas.clientWidth*dpr),h=Math.round(canvas.clientHeight*dpr);
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}gl.viewport(0,0,w,h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    eye=V.add(camera.target,[camera.distance*Math.cos(camera.pitch)*Math.cos(camera.yaw),camera.distance*Math.cos(camera.pitch)*Math.sin(camera.yaw),camera.distance*Math.sin(camera.pitch)]);
+    const fittedDistance=camera.distance*Math.max(1,.95/(w/h));
+    eye=V.add(camera.target,[fittedDistance*Math.cos(camera.pitch)*Math.cos(camera.yaw),fittedDistance*Math.cos(camera.pitch)*Math.sin(camera.yaw),fittedDistance*Math.sin(camera.pitch)]);
     viewMatrix=lookAt(eye,camera.target);viewProjection=multiply(perspective(Math.PI/4,w/h,10,18000),viewMatrix);
     gl.useProgram(program);gl.uniformMatrix4fv(uniforms.VP,false,viewProjection);gl.uniform3fv(uniforms.Lo,lo);gl.uniform3fv(uniforms.Extent,extent);
     gl.uniform3fv(uniforms.CutNormal,currentNormal);gl.uniform1f(uniforms.Depth,state.depth);gl.uniform1f(uniforms.Thickness,state.thickness);gl.uniform1f(uniforms.Flip,state.flip);
