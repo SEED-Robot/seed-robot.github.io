@@ -17,9 +17,19 @@
     norm:a=>{const d=Math.hypot(...a)||1;return a.map(x=>x/d);}
   };
   const rgb=h=>[1,3,5].map(k=>parseInt(h.slice(k,k+2),16)/255);
-  const state={focus:'group0',layer:'effect',body:'physical',cut:'off',direction:'y',depth:-12,azimuth:45,elevation:20,flip:1,thickness:12,opacity:.95,hardware:true,lines:false,guide:true};
+  const state={focus:'group0',customGenes:[],multiSelect:false,layer:'effect',body:'physical',cut:'off',direction:'y',depth:-12,azimuth:45,elevation:20,flip:1,thickness:12,opacity:.95,hardware:true,lines:false,guide:true};
   const camera={target:[...center],yaw:.72,pitch:.57,distance:Math.max(...extent)*1.8};
-  const pending=new Map(), cache=new Map(); let base, current, scalar, known;
+  const pending=new Map(), cache=new Map(), inflight=new Map(); let base, current, scalar, known;
+  const signatures=new Map(M.endpoints.map(e=>[e.genes.map(name=>M.nodes.findIndex(n=>n.alias===name)).sort((a,b)=>a-b).join(','),e.key]));
+  // Shareable views accept only known genes and enumerated display settings.
+  const params=new URLSearchParams(window.location.search);
+  if(params.has('genes')){
+    const ids=[...new Set(params.get('genes').split(',').map(name=>M.nodes.findIndex(n=>n.alias===name.trim())).filter(i=>i>=0))].sort((a,b)=>a-b);
+    if(ids.length){state.customGenes=ids;state.focus=signatures.get(ids.join(','))||'custom';state.multiSelect=ids.length>1;}
+  }
+  if(['effect','interaction','regions','product','hm','hj','dhm','dhj'].includes(params.get('layer')))state.layer=params.get('layer');
+  if(['off','cut','plane','slab'].includes(params.get('cut')))state.cut=params.get('cut');
+  if(['physical','raw','ko'].includes(params.get('body')))state.body=params.get('body');
   let bodyMesh, hardwareMeshes=[], planeMesh, frameMesh, materialTex, scalarTex, knownTex;
   let viewProjection, viewMatrix, eye, currentNormal=[0,1,0], planePoint, revision=0;
   let needRender=false, isLoading=true, legendMax=1, colorMode=1, selectedGenes=[];
@@ -34,6 +44,7 @@
   window.SEED_DATA={receive(key,obj){const p=pending.get(key);if(p){pending.delete(key);p.resolve(obj);}}};
   async function data(key) {
     if(cache.has(key)){const p=cache.get(key);if(key!=='base'){cache.delete(key);cache.set(key,p);}return p;}
+    if(inflight.has(key))return inflight.get(key);
     const promise=new Promise((resolve,reject)=>{
       pending.set(key,{resolve,reject});
       const script=document.createElement('script');script.src=`data/${key}.js`;
@@ -49,7 +60,8 @@
         else if(k==='productCoordinates')obj[k]=await inflate(raw[k],'u16');
       }));
       audit.loadedKeys.push(key); return obj;
-    });
+    }).catch(error=>{cache.delete(key);throw error;}).finally(()=>inflight.delete(key));
+    inflight.set(key,promise);
     cache.set(key,promise);
     const keys=[...cache.keys()].filter(k=>k!=='base');while(keys.length>4)cache.delete(keys.shift());
     return promise;
@@ -66,7 +78,7 @@
   uniform sampler3D uMask;uniform sampler3D uScalar;uniform sampler3D uKnown;
   uniform vec3 uLo;uniform vec3 uExtent;uniform vec3 uCutNormal;uniform vec3 uSolidColor;
   uniform float uDepth;uniform float uThickness;uniform float uOpacity;uniform float uMax;uniform float uFlip;
-  uniform int uCutMode;uniform int uPlane;uniform int uSolid;uniform int uColorMode;uniform int uLines;
+  uniform int uInteraction;uniform int uCutMode;uniform int uPlane;uniform int uSolid;uniform int uColorMode;uniform int uLines;
   vec3 category(float a){int i=int(floor(a+.5));
     if(i==1)return vec3(.153,.486,.569);if(i==2)return vec3(.518,.400,.651);
     if(i==3)return vec3(.267,.451,.682);if(i==4)return vec3(.776,.580,.208);
@@ -83,6 +95,7 @@
       float occupancy=texture(uMask,q).r;
       if(uPlane==1 && occupancy<.5 && uColorMode<4)discard;
       float a=texture(uScalar,q).r;float valid=texture(uKnown,q).r;
+      if(uPlane==1 && uInteraction==1 && occupancy<.5 && abs(a)<.5)discard;
       if(uPlane==1 && uColorMode==4 && valid<.5)discard;
       c=vec3(.83,.86,.88);
       if(uColorMode==1){if(a>.5)c=vec3(.153,.486,.569);if(a<-.5)c=vec3(.776,.580,.208);}
@@ -105,7 +118,7 @@
   function shader(type,code){const s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
   const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vert));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,frag));gl.linkProgram(program);
   if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
-  const uniforms=Object.fromEntries(['VP','Lo','Extent','CutNormal','SolidColor','Depth','Thickness','Opacity','Max','Flip','CutMode','Plane','Solid','ColorMode','Lines','Mask','Scalar','Known'].map(k=>[k,gl.getUniformLocation(program,'u'+k)]));
+  const uniforms=Object.fromEntries(['VP','Lo','Extent','CutNormal','SolidColor','Depth','Thickness','Opacity','Max','Flip','CutMode','Plane','Solid','ColorMode','Lines','Mask','Scalar','Known','Interaction'].map(k=>[k,gl.getUniformLocation(program,'u'+k)]));
   gl.useProgram(program);gl.uniform1i(uniforms.Mask,0);gl.uniform1i(uniforms.Scalar,1);gl.uniform1i(uniforms.Known,2);
   gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
   gl.disable(gl.CULL_FACE);gl.clearColor(.969,.969,.980,1);
@@ -181,7 +194,7 @@
     viewMatrix=lookAt(eye,camera.target);viewProjection=multiply(perspective(Math.PI/4,w/h,10,18000),viewMatrix);
     gl.useProgram(program);gl.uniformMatrix4fv(uniforms.VP,false,viewProjection);gl.uniform3fv(uniforms.Lo,lo);gl.uniform3fv(uniforms.Extent,extent);
     gl.uniform3fv(uniforms.CutNormal,currentNormal);gl.uniform1f(uniforms.Depth,state.depth);gl.uniform1f(uniforms.Thickness,state.thickness);gl.uniform1f(uniforms.Flip,state.flip);
-    gl.uniform1i(uniforms.CutMode,state.cut==='cut'?1:state.cut==='slab'?2:0);gl.uniform1i(uniforms.ColorMode,colorMode);gl.uniform1f(uniforms.Max,legendMax);gl.uniform1i(uniforms.Lines,state.lines?1:0);
+    gl.uniform1i(uniforms.CutMode,state.cut==='cut'?1:state.cut==='slab'?2:0);gl.uniform1i(uniforms.Interaction,state.layer==='interaction'?1:0);gl.uniform1i(uniforms.ColorMode,colorMode);gl.uniform1f(uniforms.Max,legendMax);gl.uniform1i(uniforms.Lines,state.lines?1:0);
     for(const [i,t] of [materialTex,scalarTex,knownTex].entries()){gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_3D,t);}
     gl.depthMask(true);
     if(state.cut!=='plane')draw(bodyMesh,false,[0,0,0],false,state.opacity);
@@ -198,28 +211,60 @@
   }
   function requestRender(){if(!needRender){needRender=true;requestAnimationFrame(render);}}
 
-  function focusGenes(){if(state.focus==='all')return[];if(state.focus.startsWith('gene'))return[+state.focus.slice(4)];return groups[+state.focus.slice(5)].genes;}
-  function focusName(){if(state.focus==='all')return'All measured groups';if(state.focus.startsWith('gene'))return M.nodes[+state.focus.slice(4)].alias;const g=groups[+state.focus.slice(5)];return g.id+' · '+g.genes.map(i=>M.nodes[i].alias).join(' + ');}
+  function focusGenes(){
+    if(state.focus==='all')return[];
+    if(state.focus==='custom')return [...state.customGenes];
+    if(state.focus.startsWith('gene'))return[+state.focus.slice(4)];
+    if(state.focus.startsWith('pair'))return M.extraCases[+state.focus.slice(4)].genes;
+    return groups[+state.focus.slice(5)].genes;
+  }
+  function focusName(){
+    if(state.focus==='all')return'All measured groups';
+    const names=focusGenes().map(i=>M.nodes[i].alias).join(' + ');
+    if(state.focus.startsWith('group'))return groups[+state.focus.slice(5)].id+' · '+names;
+    return names||'No genes selected';
+  }
+  function chooseGenes(ids){
+    const unique=[...new Set(ids)].sort((a,b)=>a-b);
+    state.customGenes=unique;state.focus=signatures.get(unique.join(','))||'custom';
+    $('focus').value=state.focus;return update();
+  }
   async function update(){
-    const token=++revision;isLoading=true;$('focus').classList.add('selection-spinner');
+    const token=++revision;isLoading=true;audit.interaction=null;$('focus').classList.add('selection-spinner');
     if(!base)base=await data('base');
-    selectedGenes=focusGenes();updateGraph();let selected=null;
-    if(state.focus!=='all')selected=await data(state.focus);
+    selectedGenes=focusGenes();updateGraph();let selected=null,singles=[];
+    const key=signatures.get([...selectedGenes].sort((a,b)=>a-b).join(','));
+    if(key)selected=await data(key);
+    if(state.layer==='interaction'&&key&&selectedGenes.length>=2){
+      singles=await Promise.all(selectedGenes.map(i=>data('gene'+i)));
+    }
     if(token!==revision)return;current=selected;
     let mask=state.body==='raw'?base.raw:state.body==='ko'?(current?current.ko:base.raw):base.physical;
     if(state.body==='ko'&&!current){state.body='raw';$('bodyKind').value='raw';}
     materialTex=replaceTexture(materialTex,Uint8Array.from(mask,v=>v?255:0));dispose(bodyMesh);bodyMesh=mesh(boundary(mask));
     scalar=new Float32Array(total);known=Uint8Array.from(base.raw,v=>v?255:0);legendMax=1;
     if(state.layer==='effect'){
-      if(!current){scalar=Float32Array.from(base.categories);colorMode=2;}
+      if(state.focus==='all'){scalar=Float32Array.from(base.categories);colorMode=2;}
+      else if(!current){known.fill(0);colorMode=4;}
       else{for(let i=0;i<total;i++)scalar[i]=current.loss[i]?1:current.added[i]?-1:0;colorMode=1;}
+    }else if(state.layer==='interaction'){
+      colorMode=5;legendMax=1;known.fill(255);audit.interaction=null;
+      if(current&&selectedGenes.length>=2){
+        let positive=0,negative=0,net=0;
+        for(let i=0;i<total;i++){
+          const value=current.ko[i]-base.raw[i]-singles.reduce((sum,s)=>sum+s.ko[i]-base.raw[i],0);
+          scalar[i]=value;legendMax=Math.max(legendMax,Math.abs(value));
+          if(value>0)positive++;if(value<0)negative++;net+=value;
+        }
+        audit.interaction={positive,negative,nonzero:positive+negative,net,genes:[...selectedGenes]};
+      }else{known.fill(0);colorMode=4;}
     }else if(state.layer==='regions'){scalar=Float32Array.from(state.body==='physical'?base.physicalLabels:base.rawLabels);colorMode=3;}
     else if(state.layer==='hm'||state.layer==='hj'){scalar=base[state.layer];known.fill(255);colorMode=4;}
     else if(state.layer==='dhm'||state.layer==='dhj'){
-      if(!current){$('focus').value='group0';state.focus='group0';return update();}
-      scalar=current[state.layer];known.fill(255);legendMax=M.deltaMax[state.layer==='dhm'?0:1];colorMode=5;
+      if(!current){known.fill(0);colorMode=4;}
+      else{scalar=current[state.layer];known.fill(255);legendMax=M.deltaMax[state.layer==='dhm'?0:1];colorMode=5;}
     }else{
-      const ids=selectedGenes.length?selectedGenes:M.nodes.map((_,i)=>i);const samples=base.productCoordinates.length/3;
+      const ids=selectedGenes.length?selectedGenes:(state.focus==='all'?M.nodes.map((_,i)=>i):[]);const samples=base.productCoordinates.length/3;
       for(let p=0;p<samples;p++){
         const x=base.productCoordinates[p*3]-M.cropLow[0],y=base.productCoordinates[p*3+1]-M.cropLow[1],z=base.productCoordinates[p*3+2]-M.cropLow[2];
         if(x<0||y<0||z<0||x>=size[0]||y>=size[1]||z>=size[2])continue;
@@ -232,15 +277,28 @@
     const kind=state.body==='physical'?'WT assembled body':state.body==='raw'?'WT raw material':'KO raw material';
     let text=focusName()+' · '+kind;
     if(state.layer==='effect'&&current)text+=` · ${current.lostCount.toLocaleString()} voxels lost`;
+    if(state.layer==='interaction'&&audit.interaction)text+=` · ${audit.interaction.nonzero.toLocaleString()} non-additive voxels`;
+    if(!current&&state.focus!=='all')text+=' · Joint KO not measured';
     if(state.body==='ko'&&current&&!current.assembled)text+=' · Assembly failed';
     $('status').textContent=text;$('view').dataset.selection=state.focus;$('view').dataset.layer=state.layer;$('view').dataset.body=state.body;
-    $('caption').textContent=state.layer==='product'?'WT products are sampled inside WT material only. Gray = no saved sample.':(state.layer==='hm'||state.layer==='hj'||state.layer==='dhm'||state.layer==='dhj')?'Field crop: all measured bodies + 36 mm margin. Coordinates in mm.':'';
+    $('caption').textContent=state.layer==='product'?'WT products are sampled inside WT material only. Gray = no saved sample.':state.layer==='interaction'?'Joint KO change minus the sum of single KO changes. Not a direct-edge mechanism.':(state.layer==='hm'||state.layer==='hj'||state.layer==='dhm'||state.layer==='dhj')?'Field crop: all measured bodies + 36 mm margin. Coordinates in mm.':'';
+    $('selectionSummary').textContent=selectedGenes.length?selectedGenes.map(i=>M.nodes[i].alias).join(' + '):state.focus==='all'?'Six measured groups':'No genes selected';
+    $('selectionNote').textContent=state.focus==='all'?'Overview of the six measured groups.':!current?'No measured joint KO for this selection. The graph and WT products remain available.':selectedGenes.length===1?'Measured single-gene production KO.':`Measured joint KO · ${selectedGenes.length} genes. Choose Non-additive response to compare with single KOs.`;
+    $('view').dataset.measured=String(!!current);$('view').dataset.genes=selectedGenes.map(i=>M.nodes[i].alias).join(',');
     legend();requestRender();audit.selected={...state,genes:selectedGenes.map(i=>M.nodes[i].alias)};
   }
   function swatches(items){return'<div class="swatches">'+items.map(([c,t])=>`<span><i style="background:${c}"></i>${t}</span>`).join('')+'</div>';}
   function legend(){
     let title='',content='';
-    if(state.layer==='effect'&&!current){title='Measured material dependence';content=swatches([['#a8c9df','Shared'],['#dce3e8','No measured loss'],...groups.map(g=>[g.color,g.id+' only'])]);}
+    if((['effect','dhm','dhj'].includes(state.layer)&&!current&&state.focus!=='all')||(state.layer==='interaction'&&(!current||selectedGenes.length<2))){
+      title=state.layer==='interaction'&&selectedGenes.length<2?'Select at least two genes':'Joint KO not measured';
+      content='<div class="legend-note">No combined response is inferred.</div>';
+    }
+    else if(state.layer==='interaction'){
+      title='Non-additive material response';
+      content=`<div class="colorbar" style="background:linear-gradient(to right,#21669c,#f4f4f2,#ae384a)"></div><div class="legend-range"><span>−${legendMax} · less material</span><span>+${legendMax} · more material</span></div><div class="legend-note">Compared with the sum of single KO changes.</div>`;
+    }
+    else if(state.layer==='effect'&&!current){title='Measured material dependence';content=swatches([['#a8c9df','Shared'],['#dce3e8','No measured loss'],...groups.map(g=>[g.color,g.id+' only'])]);}
     else if(state.layer==='effect'){title='Material response to production KO';content=swatches([['#277c91','Lost from WT'],['#dce3e8','Retained'],['#c69435','Added in KO view']]);}
     else if(state.layer==='regions'){title='Fixed WT body regions';content=swatches([['#c6a263','B1'],['#7aa8af','B2'],['#938aaf','B3']]);}
     else{
@@ -262,20 +320,28 @@
     });
     M.nodes.forEach((node,i)=>{
       const [x,y]=xy[i],dx=(x-165)/112,dy=(y-165)/112,anchor=dx>.15?'start':dx<-.15?'end':'middle';
-      html+=`<g class="node" data-gene="${i}" role="button" tabindex="0" aria-label="Select gene ${node.alias}"><title>${node.alias}: show measured single-gene KO</title><circle cx="${x}" cy="${y}" r="6"/><text x="${x+dx*13}" y="${y+dy*13+4}" text-anchor="${anchor}">${node.alias}</text></g>`;
+      html+=`<g class="node" data-gene="${i}" role="button" tabindex="0" aria-label="Select gene ${node.alias}" aria-pressed="false"><title>${node.alias}: click to select; Shift-click to add or remove</title><circle cx="${x}" cy="${y}" r="6"/><text x="${x+dx*13}" y="${y+dy*13+4}" text-anchor="${anchor}">${node.alias}</text></g>`;
     });svg.innerHTML=html;
     svg.querySelectorAll('[data-gene]').forEach(g=>{
-      const activate=()=>{state.focus='gene'+g.dataset.gene;$('focus').value=state.focus;update().catch(fail);};
-      g.addEventListener('click',activate);g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate();}});
+      const activate=(event={})=>{
+        const id=+g.dataset.gene,ids=focusGenes();
+        const multi=state.multiSelect||event.shiftKey||event.metaKey||event.ctrlKey;
+        chooseGenes(multi?(ids.includes(id)?ids.filter(i=>i!==id):[...ids,id]):[id]).catch(fail);
+      };
+      g.addEventListener('click',activate);g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();activate(e);}});
     });
   }
   function updateGraph(){
-    $('graph').querySelectorAll('[data-gene]').forEach(g=>g.classList.toggle('active',selectedGenes.includes(+g.dataset.gene)));
-    $('graph').querySelectorAll('[data-edge]').forEach(g=>{const e=M.edges[+g.dataset.edge];g.classList.toggle('active',selectedGenes.includes(e.source)||selectedGenes.includes(e.target));});
+    $('graph').querySelectorAll('[data-gene]').forEach(g=>{const selected=selectedGenes.includes(+g.dataset.gene);g.classList.toggle('active',selected);g.setAttribute('aria-pressed',String(selected));});
+    $('graph').querySelectorAll('[data-edge]').forEach(g=>{const e=M.edges[+g.dataset.edge];g.classList.toggle('active',selectedGenes.includes(e.source)||selectedGenes.includes(e.target));g.classList.toggle('internal',selectedGenes.includes(e.source)&&selectedGenes.includes(e.target));});
   }
   function fail(error){audit.lastError=String(error);console.error(error);$('loading').textContent=String(error);$('loading').hidden=false;}
 
-  $('focus').innerHTML='<option value="all">All measured groups</option>'+groups.map((g,i)=>`<option value="group${i}">${g.id} · ${g.genes.map(k=>M.nodes[k].alias).join(' + ')}</option>`).join('')+'<optgroup label="Single genes">'+M.nodes.map((n,i)=>`<option value="gene${i}">${n.alias}</option>`).join('')+'</optgroup>';$('focus').value=state.focus;
+  $('focus').innerHTML='<option value="all">All measured groups</option><option value="custom">Custom graph selection</option>'+groups.map((g,i)=>`<option value="group${i}">${g.id} · ${g.genes.map(k=>M.nodes[k].alias).join(' + ')}</option>`).join('')+'<optgroup label="Additional measured pairs">'+M.extraCases.map(c=>`<option value="${c.key}">${c.label}</option>`).join('')+'</optgroup><optgroup label="Single genes">'+M.nodes.map((n,i)=>`<option value="gene${i}">${n.alias}</option>`).join('')+'</optgroup>';$('focus').value=state.focus;
+  $('layer').value=state.layer;$('bodyKind').value=state.body;$('cutMode').value=state.cut;
+  $('multiSelect').setAttribute('aria-pressed',String(state.multiSelect));
+  $('multiSelect').addEventListener('click',()=>{state.multiSelect=!state.multiSelect;$('multiSelect').setAttribute('aria-pressed',String(state.multiSelect));});
+  $('clearSelection').addEventListener('click',()=>chooseGenes([]).catch(fail));
   for(const [id,key] of [['layer','layer'],['focus','focus'],['bodyKind','body']])$(id).addEventListener('change',()=>{state[key]=$(id).value;update().catch(fail);});
   $('cutMode').addEventListener('change',()=>{state.cut=$('cutMode').value;updatePlane();});
   $('direction').addEventListener('change',()=>{state.direction=$('direction').value;state.flip=1;updatePlane(true);});

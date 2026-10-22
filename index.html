@@ -8,7 +8,7 @@
 <meta name="description" content="Explore measured gene–field–body relationships in an evolved SEED robot. Interactive 3D voxels, regulatory graph, and arbitrary cross-sections.">
 <title>SEED — Gene–Body Explorer</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="styles.css?v=20261022.2">
+<link rel="stylesheet" href="styles.css?v=20261022.3">
 </head>
 <body>
 <div class="app" id="app">
@@ -23,7 +23,7 @@
 <div class="sidebar-scroll">
 <section class="control-section" aria-labelledby="displayTitle">
  <h2 id="displayTitle">View</h2>
- <label class="field" for="layer"><span>Display</span><select id="layer"><option value="effect">Material dependence</option><option value="regions">WT body regions</option><option value="product">WT gene product · c</option><option value="hm">Material field · Hm</option><option value="hj">Joint field · Hj</option><option value="dhm">Material difference · ΔHm</option><option value="dhj">Joint difference · ΔHj</option></select></label>
+ <label class="field" for="layer"><span>Display</span><select id="layer"><option value="effect">Material dependence</option><option value="interaction">Non-additive response</option><option value="regions">WT body regions</option><option value="product">WT gene product · c</option><option value="hm">Material field · Hm</option><option value="hj">Joint field · Hj</option><option value="dhm">Material difference · ΔHm</option><option value="dhj">Joint difference · ΔHj</option></select></label>
  <label class="field" for="bodyKind"><span>Body</span><select id="bodyKind"><option value="physical">WT assembled body</option><option value="raw">WT raw material</option><option value="ko">KO raw material</option></select></label>
 </section>
 <section class="control-section" aria-labelledby="selectionTitle">
@@ -46,7 +46,14 @@
 </section>
 <section id="graphPanel" class="control-section graph-panel" aria-labelledby="graphTitle">
  <div class="section-header"><h2 id="graphTitle">Regulatory map</h2><button id="graphToggle" class="text-button" aria-expanded="true" aria-controls="graphContent">Hide</button></div>
- <div id="graphContent"><p class="microcopy">Select a node to reveal its measured response.</p><svg id="graph" viewBox="0 0 330 330" role="group" aria-label="22 genes and 21 signed directed regulatory relationships"></svg><div class="graph-legend"><span>→ Activation</span><span>┤ Inhibition</span></div></div>
+ <div id="graphContent">
+  <div class="selection-actions"><button id="multiSelect" class="selection-button" aria-pressed="false">Multi-select</button><button id="clearSelection" class="text-button">Clear</button></div>
+  <p class="microcopy">Enable Multi-select, then click nodes to add or remove them. Or use Shift-click.</p>
+  <p id="selectionSummary" class="selection-summary" aria-live="polite"></p>
+  <svg id="graph" viewBox="0 0 330 330" role="group" aria-label="22 genes and 21 signed directed regulatory relationships"></svg>
+  <div class="graph-legend"><span>→ Activation</span><span>┤ Inhibition</span></div>
+  <p id="selectionNote" class="microcopy selection-note" aria-live="polite"></p>
+ </div>
 </section>
 <section class="control-section appearance-section">
  <button id="options" class="disclosure" aria-expanded="false" aria-controls="settings"><span>Display options</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 3 5 5-5 5"/></svg></button>
@@ -76,6 +83,6 @@
 </main>
 </div>
 <noscript>This interactive viewer requires JavaScript and WebGL 2.</noscript>
-<script src="data/manifest.js"></script><script src="viewer.js?v=20261022.2"></script><script src="ui.js?v=20261022.2"></script>
+<script src="data/manifest.js?v=20261022.3"></script><script src="viewer.js?v=20261022.3"></script><script src="ui.js?v=20261022.3"></script>
 </body>
 </html>
