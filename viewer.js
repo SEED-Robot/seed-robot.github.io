@@ -98,7 +98,11 @@
     }
     if(uPlane==0 && uCutMode==1 && distanceToPlane>.12)discard;
     if(uPlane==0 && uCutMode==2 && abs(distanceToPlane)>uThickness*.5)discard;
-    vec3 q=(world-uLo)/uExtent;
+    // Surface vertices sit on voxel boundaries. Sample just INSIDE the owning
+    // voxel, otherwise a positive face reads its adjacent (often empty) cell.
+    // A section instead samples the actual cut position; do not offset it.
+    vec3 sampleWorld=uPlane==0?world-normal*.12:world;
+    vec3 q=(sampleWorld-uLo)/uExtent;
     if(uSolid==0 && (any(lessThan(q,vec3(0)))||any(greaterThan(q,vec3(1)))))discard;
     vec3 c=uSolidColor;float alpha=uOpacity;
     if(uSolid==0){
