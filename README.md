@@ -45,3 +45,9 @@ Example: select **N16a + g001** (G1), then choose **Non-additive response**. The
 Hm and Hj show the original WT fields and do not change when selecting genes. ΔHm and ΔHj show the actual selected KO minus WT. A sum of selected WT gene products indicates their spatial expression, not their interaction.
 
 Shareable example: [G1 non-additive cutaway](https://seed-robot.github.io/?genes=N16a,g001&layer=interaction&cut=cut). The optional `genes`, `layer`, `cut`, and `body` URL parameters accept only the known gene aliases and supported display values.
+
+## Section context
+
+When a section is active, **Outside section** offers **Faint gray** or **Hidden**. Faint gray is the default, with independent **Context opacity** from 2–25% (default 8%). Cutaway retains the excluded half as context; Thin slab shows material outside the slab as context; Cross-section only shows the full reference body faintly around the section. Full body is unchanged.
+
+The gray shape is drawn before the colored geometry and section without depth writes, so it cannot hide the section or tint its field values. Joint hardware follows the same rule when enabled. This is a display-only reference using the currently selected body geometry, not additional material or a regenerated robot. `context=ghost|hidden` and `contextOpacity=2..25` can be included in a shared URL.

@@ -17,7 +17,7 @@
     norm:a=>{const d=Math.hypot(...a)||1;return a.map(x=>x/d);}
   };
   const rgb=h=>[1,3,5].map(k=>parseInt(h.slice(k,k+2),16)/255);
-  const state={focus:'group0',customGenes:[],multiSelect:false,layer:'effect',body:'physical',cut:'off',direction:'y',depth:-12,azimuth:45,elevation:20,flip:1,thickness:12,opacity:.95,hardware:true,lines:false,guide:true};
+  const state={focus:'group0',customGenes:[],multiSelect:false,layer:'effect',body:'physical',cut:'off',context:'ghost',contextOpacity:.08,direction:'y',depth:-12,azimuth:45,elevation:20,flip:1,thickness:12,opacity:.95,hardware:true,lines:false,guide:true};
   const camera={target:[...center],yaw:.72,pitch:.57,distance:Math.max(...extent)*1.8};
   const pending=new Map(), cache=new Map(), inflight=new Map(); let base, current, scalar, known;
   const signatures=new Map(M.endpoints.map(e=>[e.genes.map(name=>M.nodes.findIndex(n=>n.alias===name)).sort((a,b)=>a-b).join(','),e.key]));
@@ -30,6 +30,8 @@
   if(['effect','interaction','regions','product','hm','hj','dhm','dhj'].includes(params.get('layer')))state.layer=params.get('layer');
   if(['off','cut','plane','slab'].includes(params.get('cut')))state.cut=params.get('cut');
   if(['physical','raw','ko'].includes(params.get('body')))state.body=params.get('body');
+  if(['ghost','hidden'].includes(params.get('context')))state.context=params.get('context');
+  if(params.has('contextOpacity')){const value=Number(params.get('contextOpacity'));if(Number.isFinite(value))state.contextOpacity=Math.max(.02,Math.min(.25,value/100));}
   let bodyMesh, hardwareMeshes=[], planeMesh, frameMesh, materialTex, scalarTex, knownTex;
   let viewProjection, viewMatrix, eye, currentNormal=[0,1,0], planePoint, revision=0;
   let needRender=false, isLoading=true, legendMax=1, colorMode=1, selectedGenes=[];
@@ -78,6 +80,7 @@
   uniform sampler3D uMask;uniform sampler3D uScalar;uniform sampler3D uKnown;
   uniform vec3 uLo;uniform vec3 uExtent;uniform vec3 uCutNormal;uniform vec3 uSolidColor;
   uniform float uDepth;uniform float uThickness;uniform float uOpacity;uniform float uMax;uniform float uFlip;
+  uniform int uGhost;uniform float uGhostOpacity;
   uniform int uInteraction;uniform int uCutMode;uniform int uPlane;uniform int uSolid;uniform int uColorMode;uniform int uLines;
   vec3 category(float a){int i=int(floor(a+.5));
     if(i==1)return vec3(.153,.486,.569);if(i==2)return vec3(.518,.400,.651);
@@ -86,6 +89,13 @@
     if(i==7)return vec3(.659,.788,.875);return vec3(.84,.87,.89);}
   void main(){
     float distanceToPlane=(dot(world,uCutNormal)-uDepth)*uFlip;
+    if(uGhost==1){
+      if(uCutMode==1 && distanceToPlane<=.12)discard;
+      if(uCutMode==2 && abs(distanceToPlane)<=uThickness*.5)discard;
+      vec3 n=normalize(normal);
+      float light=.72+.28*abs(dot(n,normalize(vec3(.7,.4,1.))));
+      outColor=vec4(vec3(.60,.62,.66)*light,uGhostOpacity);return;
+    }
     if(uPlane==0 && uCutMode==1 && distanceToPlane>.12)discard;
     if(uPlane==0 && uCutMode==2 && abs(distanceToPlane)>uThickness*.5)discard;
     vec3 q=(world-uLo)/uExtent;
@@ -103,7 +113,7 @@
       if(uColorMode==3){if(a>.5&&a<1.5)c=vec3(.78,.64,.39);else if(a>1.5&&a<2.5)c=vec3(.48,.66,.69);else if(a>2.5)c=vec3(.58,.54,.69);}
       if(uColorMode==4){float f=clamp(a/max(uMax,.0000001),0.,1.);c=mix(vec3(.93,.96,.97),vec3(.13,.46,.57),f);if(valid<.5)c=vec3(.82,.83,.84);}
       if(uColorMode==5){float f=clamp(abs(a)/max(uMax,.0000001),0.,1.);c=mix(vec3(.96,.96,.95),a>=0.?vec3(.68,.22,.29):vec3(.13,.40,.61),sqrt(f));}
-      if(uPlane==1){alpha=.98;if(occupancy<.5)alpha=.74;}
+      if(uPlane==1)alpha=1.;
       if(uLines==1){
         vec3 cell=fract((world+vec3(486.))/12.);vec3 e=min(cell,1.-cell);
         vec3 n=abs(normal);float line;
@@ -118,7 +128,7 @@
   function shader(type,code){const s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
   const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vert));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,frag));gl.linkProgram(program);
   if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
-  const uniforms=Object.fromEntries(['VP','Lo','Extent','CutNormal','SolidColor','Depth','Thickness','Opacity','Max','Flip','CutMode','Plane','Solid','ColorMode','Lines','Mask','Scalar','Known','Interaction'].map(k=>[k,gl.getUniformLocation(program,'u'+k)]));
+  const uniforms=Object.fromEntries(['VP','Lo','Extent','CutNormal','SolidColor','Depth','Thickness','Opacity','Max','Flip','CutMode','Plane','Solid','ColorMode','Lines','Mask','Scalar','Known','Interaction','Ghost','GhostOpacity'].map(k=>[k,gl.getUniformLocation(program,'u'+k)]));
   gl.useProgram(program);gl.uniform1i(uniforms.Mask,0);gl.uniform1i(uniforms.Scalar,1);gl.uniform1i(uniforms.Known,2);
   gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
   gl.disable(gl.CULL_FACE);gl.clearColor(.969,.969,.980,1);
@@ -180,7 +190,11 @@
     verts.sort((a,b)=>Math.atan2(V.dot(V.sub(a,planePoint),v),V.dot(V.sub(a,planePoint),u))-Math.atan2(V.dot(V.sub(b,planePoint),v),V.dot(V.sub(b,planePoint),u)));
     const list=[];for(let j=1;j<verts.length-1;j++)for(const i of [0,j,j+1])list.push(...verts[i],...n);dispose(planeMesh);planeMesh=mesh(new Float32Array(list));
     const frame=[];for(let i=0;i<verts.length;i++)frame.push(...verts[i],...n,...verts[(i+1)%verts.length],...n);dispose(frameMesh);frameMesh=mesh(new Float32Array(frame),gl.LINES);
-    $('angles').hidden=state.direction!=='free';$('sliceControls').hidden=state.cut==='off';requestRender();
+    $('angles').hidden=state.direction!=='free';$('sliceControls').hidden=state.cut==='off';updateContextControls();requestRender();
+  }
+  function updateContextControls(){
+    $('contextOpacityControls').hidden=state.context!=='ghost';
+    $('contextOpacityValue').textContent=Math.round(state.contextOpacity*100)+'%';
   }
   function draw(m,solid=false,color=[.5,.5,.5],plane=false,opacity=1){
     if(!m)return;gl.uniform1i(uniforms.Solid,solid?1:0);gl.uniform3fv(uniforms.SolidColor,color);gl.uniform1i(uniforms.Plane,plane?1:0);gl.uniform1f(uniforms.Opacity,opacity);gl.bindVertexArray(m.vao);gl.drawArrays(m.primitive,0,m.count);
@@ -194,8 +208,18 @@
     viewMatrix=lookAt(eye,camera.target);viewProjection=multiply(perspective(Math.PI/4,w/h,10,18000),viewMatrix);
     gl.useProgram(program);gl.uniformMatrix4fv(uniforms.VP,false,viewProjection);gl.uniform3fv(uniforms.Lo,lo);gl.uniform3fv(uniforms.Extent,extent);
     gl.uniform3fv(uniforms.CutNormal,currentNormal);gl.uniform1f(uniforms.Depth,state.depth);gl.uniform1f(uniforms.Thickness,state.thickness);gl.uniform1f(uniforms.Flip,state.flip);
-    gl.uniform1i(uniforms.CutMode,state.cut==='cut'?1:state.cut==='slab'?2:0);gl.uniform1i(uniforms.Interaction,state.layer==='interaction'?1:0);gl.uniform1i(uniforms.ColorMode,colorMode);gl.uniform1f(uniforms.Max,legendMax);gl.uniform1i(uniforms.Lines,state.lines?1:0);
+    gl.uniform1i(uniforms.CutMode,state.cut==='cut'?1:state.cut==='slab'?2:state.cut==='plane'?3:0);gl.uniform1i(uniforms.Interaction,state.layer==='interaction'?1:0);gl.uniform1i(uniforms.ColorMode,colorMode);gl.uniform1f(uniforms.Max,legendMax);gl.uniform1i(uniforms.Lines,state.lines?1:0);
     for(const [i,t] of [materialTex,scalarTex,knownTex].entries()){gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_3D,t);}
+    // Context is a gray background pass: it never writes depth or covers the section.
+    audit.contextPass={enabled:state.cut!=='off'&&state.context==='ghost',mode:state.cut,opacity:state.contextOpacity,meshPasses:0};
+    if(audit.contextPass.enabled){
+      gl.uniform1i(uniforms.Ghost,1);gl.uniform1f(uniforms.GhostOpacity,state.contextOpacity);
+      gl.depthMask(false);gl.disable(gl.DEPTH_TEST);
+      draw(bodyMesh);audit.contextPass.meshPasses++;
+      if(state.hardware&&state.body==='physical')for(const m of hardwareMeshes){draw(m.mesh,true);audit.contextPass.meshPasses++;}
+      gl.enable(gl.DEPTH_TEST);
+    }
+    gl.uniform1i(uniforms.Ghost,0);
     gl.depthMask(true);
     if(state.cut!=='plane')draw(bodyMesh,false,[0,0,0],false,state.opacity);
     if(state.hardware&&state.body==='physical'&&state.cut!=='plane')for(const m of hardwareMeshes)draw(m.mesh,true,m.color,false,1);
@@ -207,7 +231,7 @@
     if(!handle.hidden){const p=project(planePoint);handle.style.left=p[0]+'px';handle.style.top=p[1]+'px';}
     const axes=[[1,0,0],[0,1,0],[0,0,1]],labels=['X','Y','Z'];let html='';
     axes.forEach((a,i)=>{const x=(viewMatrix[0]*a[0]+viewMatrix[4]*a[1]+viewMatrix[8]*a[2])*26,y=-(viewMatrix[1]*a[0]+viewMatrix[5]*a[1]+viewMatrix[9]*a[2])*26;html+=`<line x1="40" y1="40" x2="${40+x}" y2="${40+y}" stroke="#92a4ad"/><text x="${40+x*1.2}" y="${43+y*1.2}" text-anchor="middle">${labels[i]}</text>`;});$('axis').innerHTML=html;
-    const err=gl.getError();if(err){audit.lastError=err;console.error('WebGL error',err);}audit.frame++;$('view').dataset.renderFrame=String(audit.frame);$('view').dataset.renderError=audit.lastError||'';
+    const err=gl.getError();if(err){audit.lastError=err;console.error('WebGL error',err);}audit.frame++;$('view').dataset.renderFrame=String(audit.frame);$('view').dataset.renderError=audit.lastError||'';$('view').dataset.context=state.context;$('view').dataset.contextOpacity=String(state.contextOpacity);
   }
   function requestRender(){if(!needRender){needRender=true;requestAnimationFrame(render);}}
 
@@ -339,11 +363,14 @@
 
   $('focus').innerHTML='<option value="all">All measured groups</option><option value="custom">Custom graph selection</option>'+groups.map((g,i)=>`<option value="group${i}">${g.id} · ${g.genes.map(k=>M.nodes[k].alias).join(' + ')}</option>`).join('')+'<optgroup label="Additional measured pairs">'+M.extraCases.map(c=>`<option value="${c.key}">${c.label}</option>`).join('')+'</optgroup><optgroup label="Single genes">'+M.nodes.map((n,i)=>`<option value="gene${i}">${n.alias}</option>`).join('')+'</optgroup>';$('focus').value=state.focus;
   $('layer').value=state.layer;$('bodyKind').value=state.body;$('cutMode').value=state.cut;
+  $('cutContext').value=state.context;$('contextOpacity').value=Math.round(state.contextOpacity*100);
   $('multiSelect').setAttribute('aria-pressed',String(state.multiSelect));
   $('multiSelect').addEventListener('click',()=>{state.multiSelect=!state.multiSelect;$('multiSelect').setAttribute('aria-pressed',String(state.multiSelect));});
   $('clearSelection').addEventListener('click',()=>chooseGenes([]).catch(fail));
   for(const [id,key] of [['layer','layer'],['focus','focus'],['bodyKind','body']])$(id).addEventListener('change',()=>{state[key]=$(id).value;update().catch(fail);});
   $('cutMode').addEventListener('change',()=>{state.cut=$('cutMode').value;updatePlane();});
+  $('cutContext').addEventListener('change',()=>{state.context=$('cutContext').value;updateContextControls();requestRender();});
+  $('contextOpacity').addEventListener('input',()=>{state.contextOpacity=+$('contextOpacity').value/100;updateContextControls();requestRender();});
   $('direction').addEventListener('change',()=>{state.direction=$('direction').value;state.flip=1;updatePlane(true);});
   $('depth').addEventListener('input',()=>{state.depth=+$('depth').value;updatePlane();});
   for(const id of ['azimuth','elevation'])$(id).addEventListener('input',()=>{state[id]=+$(id).value;updatePlane(true);});

@@ -8,7 +8,7 @@
 <meta name="description" content="Explore measured gene–field–body relationships in an evolved SEED robot. Interactive 3D voxels, regulatory graph, and arbitrary cross-sections.">
 <title>SEED — Gene–Body Explorer</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="styles.css?v=20261022.3">
+<link rel="stylesheet" href="styles.css?v=20261022.4">
 </head>
 <body>
 <div class="app" id="app">
@@ -35,6 +35,12 @@
  <h2 id="sectionTitle">Section</h2>
  <label class="field compact-field" for="cutMode"><span>Mode</span><select id="cutMode"><option value="off" selected>Full body</option><option value="cut">Cutaway</option><option value="plane">Cross-section only</option><option value="slab">Thin slab</option></select></label>
  <div id="sliceControls" class="slice-controls" hidden>
+  <label class="field compact-field" for="cutContext"><span>Outside section</span><select id="cutContext"><option value="ghost" selected>Faint gray</option><option value="hidden">Hidden</option></select></label>
+  <div id="contextOpacityControls">
+   <div class="range-header"><label for="contextOpacity">Context opacity</label><output id="contextOpacityValue">8%</output></div>
+   <input id="contextOpacity" type="range" min="2" max="25" value="8" step="1" aria-label="Gray context opacity">
+   <p class="microcopy">Gray context shows the shape only, without field values.</p>
+  </div>
   <label class="field compact-field" for="direction"><span>Plane normal</span><select id="direction"><option value="x">X axis</option><option value="y" selected>Y axis</option><option value="z">Z axis</option><option value="free">Custom angle</option></select></label>
   <div class="range-header"><label for="depth">Depth</label><output id="depthValue">−12 mm</output></div>
   <div class="range-row"><input id="depth" type="range" min="-400" max="400" value="-12" step="1" aria-label="Section depth"><button id="flip" class="icon-button" title="Reverse the retained side" aria-label="Reverse the retained side">↔</button></div>
@@ -83,6 +89,6 @@
 </main>
 </div>
 <noscript>This interactive viewer requires JavaScript and WebGL 2.</noscript>
-<script src="data/manifest.js?v=20261022.3"></script><script src="viewer.js?v=20261022.3"></script><script src="ui.js?v=20261022.3"></script>
+<script src="data/manifest.js?v=20261022.3"></script><script src="viewer.js?v=20261022.4"></script><script src="ui.js?v=20261022.3"></script>
 </body>
 </html>
